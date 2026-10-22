@@ -272,10 +272,32 @@ func (c *StreamableHTTP) Close() error {
 				}
 			}
 
+			for k, v := range c.headers {
+				req.Header.Set(k, v)
+			}
+
 			// Set custom Host header if provided
 			if c.host != "" {
 				req.Host = c.host
 			}
+
+			// A server that authenticates every request refuses a DELETE
+			// without credentials and keeps the session open.
+			if c.oauthHandler != nil {
+				authHeader, err := c.oauthHandler.GetAuthorizationHeader(ctx)
+				if err != nil {
+					c.logger.Error("failed to get authorization header for close request", "err", err)
+				} else {
+					req.Header.Set("Authorization", authHeader)
+				}
+			}
+
+			if c.headerFunc != nil {
+				for k, v := range c.headerFunc(ctx) {
+					req.Header.Set(k, v)
+				}
+			}
+
 			res, err := c.httpClient.Do(req)
 			if err != nil {
 				c.logger.Error("failed to send close request", "err", err)
